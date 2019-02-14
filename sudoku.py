@@ -82,6 +82,7 @@ def load_games(example=False):
         yield example + rules
 
     for raw in load_raw_sudokus(SUDOKU_PATH):
+
         yield read_raw_sudoku(raw) + rules
 
 
@@ -110,6 +111,10 @@ def draw_assignment(assignment):
             row, col = int(row) - 1, int(col) - 1
 
             board[row][col] = number
+
+    board = "\n".join(["|".join([board[row][col] for col in range(9)]) for row
+                      in range(9)])
+    return board
 
 
 if __name__ == "__main__":

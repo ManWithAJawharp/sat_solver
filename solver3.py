@@ -93,7 +93,7 @@ def set_literal(clauses, assignment, literal):
     for clause in clauses:
         if literal in clause:
             if not value:
-                new_clauses.append(clause - set([literal]))
+                new_clauses.append(clause - set(literal))
         else:
             new_clauses.append(clause)
 
@@ -148,82 +148,38 @@ def davis_putnam(clauses, assignment, check_tautology=False, simplify=False):
 
     # Check for tautologies and remove them.
     if check_tautology:
-        clauses_no_taut = remove_tautologies(clauses)
-        if clauses != clauses_no_taut:
-            print("Removed tautologies")
-            return davis_putnam(clauses_no_taut, assignment)
+        # clauses_no_taut = remove_tautologies(clauses)
+        # if clauses != clauses_no_taut:
+        #     print("Removed tautologies")
+        #     return davis_putnam(clauses_no_taut, assignment)
+        clauses = remove_tautologies(clauses)
 
     # Check for unit clauses.
-    clauses_no_units, assignment = remove_unit_clauses(clauses, assignment)
-    if clauses != clauses_no_units:
-        print("Found unit clauses")
-        return davis_putnam(clauses_no_units, assignment)
+    # clauses_no_units, assignment = remove_unit_clauses(clauses, assignment)
+    # if clauses != clauses_no_units:
+    #     print("Found unit clauses")
+    #     return davis_putnam(clauses_no_units, assignment)
+    clauses, assignment = remove_unit_clauses(clauses, assignment)
 
-    if simplify:
-        return False, assignment
-
-    '''
-    # Split at pure literals.
+    # Check for pure literals.
     for pure_literal in detect_pure_literals(clauses):
-        print(f"Set {pure_literal} to True")
-        assignment[pure_literal] = True
+        if pure_literal > 0:
+            print(f"Set {pure_literal} to True")
+        assignment = set_assignment(assignment, pure_literal, True)
 
         clauses_no_pure = set_literal(
             clauses, assignment, pure_literal)
-        satisfied, assignment_ = davis_putnam(clauses_no_pure, assignment)
+        return davis_putnam(clauses_no_pure, assignment)
 
-        if satisfied:
-            return satisfied, assignment_
-        else:
-            print(f"Set {pure_literal} to False")
-            assignment[pure_literal] = False
-
-            clauses_no_pure = set_literal(
-                clauses, assignment, pure_literal)
-            return davis_putnam(clauses_no_pure, assignment)
-    '''
-
-    # Perform split.
-    literals = set()
-    current = time.time()
+    # Select literal 
+    variables = set()
     for clause in clauses:
-        literals = literals | clause
+        variables = variables | clause
 
-    cp = {literal: count_positive(clauses, literal) for literal in literals}
-    cn = {literal: count_negative(clauses, literal) for literal in literals}
+    literal = random.choice(list(variables))
 
-    selected_literal = None
-    for literal in literals:
-        if selected_literal is None:
-            selected_literal = literal
-        else:
-            combined_sum = cp[literal] + cn[literal]
-            largest_combined_sum = cp[selected_literal] + cn[selected_literal]
-
-            if combined_sum > largest_combined_sum:
-                selected_literal = literal
-
-    value = cp[selected_literal] > cn[selected_literal]
-    # assignment[selected_literal] = value
-    assignment = set_assignment(assignment, selected_literal, value)
-    clauses_split = set_literal(clauses, assignment, selected_literal)
-
-    if clauses_split != clauses:
-        print(f"Performed split at {selected_literal}={value}")
-        satisfied, assignment_ = davis_putnam(clauses_split, assignment,
-                                              simplify=True)
-
-        if not satisfied:
-            # assignment[selected_literal] = value
-            assignment = set_assignment(
-                assignment, selected_literal, not value)
-            clauses_split = set_literal(clauses, assignment, selected_literal)
-            return davis_putnam(clauses_split, assignment)
-        else:
-            return True, assignment_
-
-    print("Uh oh")
-    return False, assignment
+    return (davis_putnam(clauses + [{literal}], assignment) or
+            davis_putnam(clauses + [{-literal}]))
 
 
 if __name__ == "__main__":
@@ -243,4 +199,4 @@ if __name__ == "__main__":
         print(satisfied, assignment)
         print(draw_assignment(assignment))
     except RecursionError:
-        pass
+        print("Kut")
