@@ -36,6 +36,8 @@ def read_raw_sudoku(raw):
         if element in '123456789':
             clauses.append({int(f"{row}{col}{element}")})
 
+    # print(clauses)
+
     return sorted(clauses)
 
 
@@ -112,10 +114,42 @@ def draw_assignment(assignment):
 
             board[row][col] = number
 
+    for idx, row in enumerate(board):
+        for jdx, col in enumerate(row):
+            if col == '.':
+                literals = {str(-idx) + str(jdx) + str(i+1) for i in range(9)}
+
+                for key, value in assignment.items():
+                    if key in literals:
+                        if value:
+                            print(str(abs(key)))
+                            literals.remove(str(abs(key)))
+                        else:
+                            board[idx][jdx] = key[1:]
+                            break
+                #print(literals)
+
     board = "\n".join(["|".join([board[row][col] for col in range(9)]) for row
                       in range(9)])
+
     return board
 
 
+def create_assignment(game):
+    """
+    Convert a game into a truth assignment.
+    """
+    assignment = {}
+
+    for clause in game:
+        if len(clause) is 1:
+            assignment[clause.pop()] = True
+
+    return assignment
+
+
 if __name__ == "__main__":
-    print(len(load_example()))
+    example = load_example()
+
+    assignment = create_assignment(example)
+    print(draw_assignment(assignment))
