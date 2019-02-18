@@ -15,11 +15,13 @@ def create_clauses(*clauses):
 def unit_propagate(clauses, literal):
     global assignment
 
+    # Get assignment.
     if literal < 0:
         value = not assignment[abs(literal)]
     else:
         value = assignment[literal]
 
+    # Assign literal.
     for idx in list(clauses.keys()):
         clause = clauses[idx]
 

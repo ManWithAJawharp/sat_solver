@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 EXAMPLE_PATH = 'example.txt'
 RULES_PATH = 'sudoku_rules.txt'
 SUDOKU_PATH = '1000_sudokus.txt'
@@ -35,8 +37,6 @@ def read_raw_sudoku(raw):
 
         if element in '123456789':
             clauses.append({int(f"{row}{col}{element}")})
-
-    # print(clauses)
 
     return sorted(clauses)
 
@@ -81,11 +81,11 @@ def load_games(example=False):
     if example:
         example = load_dimacs(EXAMPLE_PATH)
 
-        yield example + rules
+        yield deepcopy(example + rules)
 
     for raw in load_raw_sudokus(SUDOKU_PATH):
 
-        yield read_raw_sudoku(raw) + rules
+        yield deepcopy(read_raw_sudoku(raw) + rules)
 
 
 def load_example():
