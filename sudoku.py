@@ -148,6 +148,44 @@ def create_assignment(game):
     return assignment
 
 
+def check_sudoku(entries):
+    """
+    Check if a sudoku was solved correctly.
+
+    Parameters
+    ----------
+    entries : iterable
+    """
+    template = {idx + 1 for idx in range(9)}
+
+    for idx in range(9):
+        row = entries[9*idx:9*idx+9]
+        if set(row) != template:
+            print(f"Row {idx+1}: {row} is incorrect.")
+            return False
+
+    for idx in range(9):
+        col = entries[idx::9]
+        if set(col) != template:
+            print(f"Column {idx+1}: {col} is incorrect.")
+            return False
+
+    for idx in range(3):
+        for jdx in range(3):
+            block = []
+            for kdx in range(3):
+                start = 3 * jdx + 3 * 9 * idx + 9 * kdx
+                block.append(entries[start:start+3])
+
+            block = [inner for outer in block for inner in outer]
+
+            if set(block) != template:
+                print(f"Block {idx+1}: {block} is incorrect.")
+                return False
+
+    return True
+
+
 if __name__ == "__main__":
     example = load_example()
 

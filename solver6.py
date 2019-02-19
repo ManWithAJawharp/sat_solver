@@ -2,239 +2,257 @@ import random
 
 from tqdm import tqdm
 
-from sudoku import load_games, load_example, draw_assignment
+from sudoku import load_games, load_example, draw_assignment, check_sudoku
 
 RC = 0  # 'Remove Clause'
 RL = 1  # 'Remove Literal'
 AA = 2  # 'Add Assignment'
-AC = 3  # 'Add Clause'
-
-clauses = {}
-change_log = [[]]
-assignment = {}
-contain = {}  # All clauses that contain a certain literal.
 
 
-def create_clauses(*clauses):
-    """
-    Convert a list of clauses to a dictionary where each entry's key
-    is the clause's index.
-    """
-    clauses = {idx: clause for idx, clause in enumerate(clauses)}
+class Solver():
+    def __init__(self, clauses):
+        self.clauses = self.create_clauses(*clauses)
+        self.change_log = [[]]
+        self.assignment = {}
+        self.contain = self.get_containment()
 
-    return clauses
+    def create_clauses(self, *clauses):
+        """
+        Convert a list of clauses to a dictionary where each entry's key
+        is the clause's index.
+        """
+        clauses = {idx: clause for idx, clause in enumerate(clauses)}
 
+        return clauses
 
-def add_assignment(literal, value):
-    """
-    Add an assignment
-    """
-    global assignment
+    def add_assignment(self, literal, value):
+        """
+        Add an assignment
+        """
+        if literal < 0:
+            literal = abs(literal)
+            value = not value
 
-    if literal < 0:
-        literal = abs(literal)
-        value = not value
+        self.assignment[literal] = value
 
-    assignment[literal] = value
+        self.change_log[-1].append((AA, literal, literal))
 
-    change_log[-1].append((AA, literal, literal))
+    def get_assignment(self, literal):
+        """
+        Retrieve the assignment of a literal.
+        """
+        value = self.assignment[abs(literal)]
 
-
-def get_assignment(literal):
-    global assignment
-
-    value = assignment[abs(literal)]
-
-    if literal < 0:
-        return not value
-    else:
-        return value
-
-
-def delete_clause(idx):
-    global clauses, change_log
-
-    clause = clauses[idx]
-
-    change_log[-1].append((RC, idx, clause))
-    del clauses[idx]
-
-
-def delete_literal(idx, literal):
-    global clauses, change_log
-
-    clauses[idx].remove(literal)
-    change_log[-1].append((RL, idx, literal))
-
-
-def assign_literal(literal):
-    global clauses
-
-    # print(clauses)
-
-    value = get_assignment(literal)
-
-    for idx in list(clauses.keys()):
-        clause = clauses[idx]
-
-        if literal in clause:
-            if value:
-                delete_clause(idx)
-            else:
-                delete_literal(idx, literal)
-        elif -literal in clause:
-            if not value:
-                delete_clause(idx)
-            else:
-                delete_literal(idx, -literal)
-
-
-def restore():
-    global clauses, change_log
-
-    # print("Restoring")
-
-    log_entry = change_log.pop()
-
-    while len(log_entry) > 0:
-        action, idx, content = log_entry.pop()
-
-        if action is RC:
-            clauses[idx] = content
-        elif action is RL:
-            clauses[idx].add(content)
-        elif action is AA:
-            del assignment[abs(content)]
+        if literal < 0:
+            return not value
         else:
-            print("Cannot restore, action not recognized.")
-            print(f"({action}, {idx}, {content}")
+            return value
 
+    def delete_clause(self, idx):
+        """
+        Delete a clause from the set of clauses by its index.
+        """
+        clause = self.clauses[idx]
 
-def remove_tautologies():
-    global clauses
+        self.change_log[-1].append((RC, idx, clause))
+        del self.clauses[idx]
 
-    for idx in list(clauses.keys()):
-        clause = clauses[idx]
+    def delete_literal(self, idx, literal):
+        """
+        Delete a literal from a clause.
 
-        for literal in clause:
-            if -literal in clause:
-                delete_clause(idx)
-                break
+        The clause is addressed by its index.
+        """
+        self.clauses[idx].remove(literal)
+        self.change_log[-1].append((RL, idx, literal))
 
+    def assign_literal(self, literal):
+        """
+        Simplify the set of clauses by removing references to a assigned
+        literal and its negations.
+        """
+        value = self.get_assignment(literal)
 
-def unit_propagate():
-    global clauses
+        for idx in list(self.clauses.keys()):
+            clause = self.clauses[idx]
 
-    for idx in list(clauses.keys()):
-        clause = clauses[idx]
+            if literal in clause:
+                if value:
+                    self.delete_clause(idx)
+                else:
+                    self.delete_literal(idx, literal)
+            elif -literal in clause:
+                if not value:
+                    self.delete_clause(idx)
+                else:
+                    self.delete_literal(idx, -literal)
 
-        if len(clause) is 1:
-            literal = list(clause)[0]
+    def restore(self):
+        """
+        Undo the most recent stack of changes in the change log.
 
-            add_assignment(literal, value=True)
-            assign_literal(literal)
+        The change log is a stack of stacks; the top element of this
+        stack is removed and its operations are reversed.
+        """
+        log_entry = self.change_log.pop()
 
-            return dpll()
+        while len(log_entry) > 0:
+            action, idx, content = log_entry.pop()
 
+            if action is RC:
+                # Recover a clause.
+                self.clauses[idx] = content
+            elif action is RL:
+                # Recover a literal.
+                self.clauses[idx].add(content)
+            elif action is AA:
+                # Undo a variable assignment.
+                del self.assignment[abs(content)]
+            else:
+                raise ValueError(
+                    f"Cannot restore, action not recognized."
+                    f"({action}, {idx}, {content}")
 
-def get_variables():
-    global variables
+    def remove_tautologies(self):
+        for idx in list(self.dlauses.keys()):
+            clause = self.dlauses[idx]
 
-    variables = set()
+            for literal in clause:
+                if -literal in clause:
+                    self.delete_clause(idx)
+                    break
 
-    for idx in clauses:
-        variables = variables | clauses[idx]
+    def unit_propagate(self):
+        global clauses
 
-    return variables
+        for idx in list(self.clauses.keys()):
+            clause = self.clauses[idx]
 
+            if len(clause) is 1:
+                literal = list(clause)[0]
 
-def dpll():
-    global clauses, change_log, assignment
+                self.add_assignment(literal, value=True)
+                self.assign_literal(literal)
 
-    # print(len(clauses))
+                return self.dpll()
 
-    if len(clauses) is 0:
-        # Set of clauses is empty.
-        return True
+    def get_variables(self):
+        variables = set()
 
-    for idx in clauses:
-        if len(clauses[idx]) is 0:
-            # Set of clauses contains an empty clause.
-            # print(f"Found empty clause: {idx}: {clauses[idx]}")
-            return False
+        for idx in self.clauses:
+            clause = {abs(literal) for literal in self.clauses[idx]}
+            variables = variables | clause
 
-    for idx in list(clauses.keys()):
-        clause = clauses[idx]
+        return variables
 
-        if len(clause) is 1:
-            # print(f"Found unit clause {clause}")
-            literal = list(clause)[0]
+    def get_containment(self):
+        contain = {}
 
-            add_assignment(literal, value=True)
-            assign_literal(literal)
+        for idx in self.clauses:
+            clause = self.clauses[idx]
 
-            return dpll()
+            for literal in clause:
+                if literal in contain:
+                    contain[literal] += 1
+                else:
+                    contain[literal] = 1
 
-    literal = random.choice(list(get_variables()))
+        return contain
 
-    change_log.append([])
+    def dpll(self):
+        unfinished = True
+        while unfinished:
+            unfinished = False
 
-    # print(f"Set {literal} to True")
-    add_assignment(literal, True)
-    assign_literal(literal)
+            if len(self.clauses) is 0:
+                # Set of clauses is empty.
+                return True
 
-    satisfied = dpll()
+            for idx in self.clauses:
+                if len(self.clauses[idx]) is 0:
+                    # Set of clauses contains an empty clause.
+                    # print(f"Found empty clause: {idx}: {clauses[idx]}")
+                    return False
 
-    if satisfied:
-        return True
+            # Simplify the set of clauses by assigning the literals of
+            # unit clauses.
+            for idx in list(self.clauses.keys()):
+                clause = self.clauses[idx]
 
-    restore()
-    change_log.append([])
+                if len(clause) is 1:
+                    # print(f"Found unit clause {clause}")
+                    literal = list(clause)[0]
 
-    # print(f"Set {literal} to False")
-    add_assignment(literal, False)
+                    self.add_assignment(literal, value=True)
+                    self.assign_literal(literal)
 
-    return dpll()
+                    unfinished = True
+                    break
 
+        # Select a litereal to split.
+        literal = random.choice(list(self.get_variables()))
+        value = True
 
-# clauses = create_clauses({1, -2}, {2, 3}, {-3, 1}, {-1, 2, 3, 1})
+        self.change_log.append([])
 
-example = load_example()
-clauses = create_clauses(*example)
+        # print(f"Set {literal} to True")
+        self.add_assignment(literal, value)
+        self.assign_literal(literal)
 
-try:
-    satisfied = dpll()
-except RecursionError:
-    satisfied = False
+        satisfied = self.dpll()
 
-print(satisfied)
-print(draw_assignment(assignment))
-
-successes = []
-for idx, game in tqdm(enumerate(load_games())):
-    clauses = create_clauses(*game)
-    change_log = [[]]
-    assignment = {}
-    contain = {}  # All clauses that contain a certain literal.
-
-    try:
-        satisfied = dpll()
-    except RecursionError:
-        print("Uh oh")
-        state = 'recursion_error'
-    else:
         if satisfied:
-            state = 'success'
+            return True
+
+        self.restore()
+        self.change_log.append([])
+
+        # print(f"Set {literal} to False")
+        self.add_assignment(literal, not value)
+
+        return self.dpll()
+
+
+if __name__ == "__main__":
+    example = load_example()
+    solver = Solver(example)
+
+    satisfied = solver.dpll()
+
+    print(satisfied)
+    draw = draw_assignment(solver.assignment)
+    entries = [int(char) for char in draw if char in '123456789']
+    if check_sudoku(entries):
+        print("Sudoku is correct")
+
+    successes = []
+    n_games = 200
+
+    for idx, game in tqdm(enumerate(load_games()), total=n_games):
+        solver = Solver(game)
+        change_log = [[]]
+        assignment = {}
+        contain = {}  # All clauses that contain a certain literal.
+
+        try:
+            satisfied = solver.dpll()
+        except RecursionError:
+            state = 'error'
         else:
-            state = 'failure'
+            if satisfied:
+                state = 'success'
+            else:
+                state = 'failure'
 
-    successes.append(state)
+        successes.append(state)
 
-    if idx > 100:
-        break
+        if idx >= n_games:
+            break
 
-success_rate = sum([state == 'success' for state in successes]) / (idx + 1)
-failure_rate = sum([state == 'failure' for satisfied in successes]) / (idx + 1)
+    success_rate = sum([state == 'success' for state
+                        in successes]) / (idx + 1)
+    failure_rate = sum([state == 'failure' for satisfied
+                        in successes]) / (idx + 1)
 
-print(f"Success rate: {success_rate * 100:0.1f}% | "
-      f"Failure rate: {failure_rate * 100:0.1f}%")
+    print(f"\nSuccess rate: {success_rate * 100:0.1f}% | "
+          f"Failure rate: {failure_rate * 100:0.1f}%")
