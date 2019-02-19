@@ -167,6 +167,8 @@ class Solver():
         return contain
 
     def dpll(self):
+        # print(len(self.clauses))
+
         unfinished = True
         while unfinished:
             unfinished = False
@@ -202,16 +204,19 @@ class Solver():
 
         # Select a literal to split.
         # TODO: Try something a bit more challenging than a random split.
-        if random.random() < 0.2:
+        if random.random() < 0:
             literal = random.choice(list(self.get_variables()))
             value = random.choice([True, False])
         else:
+            literal = list(self.get_variables())[0]
+            value = True
+            '''
             contains = self.get_containment()
             occurences = {literal: len(contains[literal])
                           for literal in contains}
             literal = max(occurences, key=lambda key: occurences[key])
             value = contains[literal] > contains[-literal]
-            print()
+            '''
 
         self.change_log.append([])
 
@@ -225,10 +230,11 @@ class Solver():
             return True
 
         self.restore()
-        self.change_log.append([])
+        # self.change_log.append([])
 
         # print(f"Set {literal} to False")
         self.add_assignment(literal, not value)
+        self.assign_literal(literal)
 
         return self.dpll()
 
@@ -246,6 +252,7 @@ if __name__ == "__main__":
         print("Sudoku is correct")
 
     successes = []
+    correct = []
     n_games = 40
 
     for idx, game in tqdm(enumerate(load_games()), total=n_games):
@@ -270,9 +277,9 @@ if __name__ == "__main__":
             break
 
     success_rate = sum([state == 'success' for state
-                        in successes]) / (idx + 1)
-    failure_rate = sum([state == 'failure' for satisfied
-                        in successes]) / (idx + 1)
+                        in successes]) / len(successes)
+    failure_rate = sum([state == 'failure' for state
+                        in successes]) / len(successes)
 
     print(f"\nSuccess rate: {success_rate * 100:0.1f}% | "
           f"Failure rate: {failure_rate * 100:0.1f}%")
