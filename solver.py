@@ -1,246 +1,278 @@
 import random
-import time
 
-from sudoku import load_example, draw_assignment
+from tqdm import tqdm
 
+from sudoku import load_games, load_example, draw_assignment, check_sudoku
 
-def set_assignment(assignment, literal, value):
-    """
-    Set the assignment of a literal to true or false.
-    """
-    if literal < 0:
-        literal = abs(literal)
-        value = not value
-
-    assignment[literal] = value
-
-    return assignment
+RC = 0  # 'Remove Clause'
+RL = 1  # 'Remove Literal'
+AA = 2  # 'Add Assignment'
 
 
-def get_assignment(assignment, literal):
-    """
-    Get the assignment of a literal.
-    """
-    if literal < 0:
-        key_literal = abs(literal)
-    else:
-        key_literal = literal
+class Solver():
+    def __init__(self, clauses):
+        self.clauses = self.create_clauses(*clauses)
+        self.change_log = [[]]
+        self.assignment = {}
+        self.contain = self.get_containment()
 
-    value = assignment[key_literal]
+    def create_clauses(self, *clauses):
+        """
+        Convert a list of clauses to a dictionary where each entry's key
+        is the clause's index.
+        """
+        clauses = {idx: clause for idx, clause in enumerate(clauses)}
 
-    if literal < 0:
-        return not value
-    else:
-        return value
+        return clauses
 
+    def add_assignment(self, literal, value):
+        """
+        Add an assignment
+        """
+        if literal < 0:
+            literal = abs(literal)
+            value = not value
 
-def remove_tautologies(clauses):
-    """
-    Remove all tautologies from a set of clauses.
-    """
-    new_clauses = []
-    for clause in clauses:
-        for variable in clause:
-            if -variable in clause:
-                # Clause contains `P v -P`
-                break
-            else:
-                new_clauses.append(clause)
-                break
+        self.assignment[literal] = value
 
-    return new_clauses
+        self.change_log[-1].append((AA, literal, literal))
 
+    def get_assignment(self, literal):
+        """
+        Retrieve the assignment of a literal.
+        """
+        value = self.assignment[abs(literal)]
 
-def remove_unit_clauses(clauses, assignment):
-    """
-    Clear out all unit clauses in a set, removing any redundant clauses
-    as a result.
-    """
-    new_clauses = clauses
-
-    for clause in new_clauses:
-        if len(clause) is 1:
-            literal = list(clause)[0]
-            # assignment[literal] = True
-            assignment = set_assignment(assignment, literal, True)
-
-            new_clauses = set_literal(clauses, assignment, literal)
-
-    return new_clauses, assignment
-
-
-def remove_literal(clauses, literal):
-    """
-    Remove a literal from a set of clauses.
-    """
-    new_clauses = []
-
-    for clause in clauses:
-        new_clauses.append(clause - {literal})
-
-    return new_clauses
-
-
-def set_literal(clauses, assignment, literal):
-    """
-    Update the set of clauses given the value of a single literal.
-    """
-    # value = assignment[literal]
-    value = get_assignment(assignment, literal)
-
-    new_clauses = []
-
-    for clause in clauses:
-        if literal in clause:
-            if not value:
-                new_clauses.append(clause - set([literal]))
+        if literal < 0:
+            return not value
         else:
-            new_clauses.append(clause)
+            return value
 
-    return new_clauses
+    def delete_clause(self, idx):
+        """
+        Delete a clause from the set of clauses by its index.
+        """
+        clause = self.clauses[idx]
 
+        self.change_log[-1].append((RC, idx, clause))
+        del self.clauses[idx]
 
-def detect_pure_literals(clauses, shuffle=True):
-    """
-    Find all pure literals.
-    """
-    variables = set()
-    for clause in clauses:
-        variables = variables | clause
+    def delete_literal(self, idx, literal):
+        """
+        Delete a literal from a clause.
 
-    if shuffle:
-        random.shuffle(list(variables))
-        variables = set(variables)
+        The clause is addressed by its index.
+        """
+        self.clauses[idx].remove(literal)
+        self.change_log[-1].append((RL, idx, literal))
 
-    for variable in variables:
-        if -variable not in variables:
-            # Pure literal detected.
-            yield variable
+    def assign_literal(self, literal):
+        """
+        Simplify the set of clauses by removing references to a assigned
+        literal and its negations.
+        """
+        value = self.get_assignment(literal)
 
+        # TODO: Optimize using self.contain.
 
-def count_positive(clauses, literal):
-    """
-    Count the number of times a literal appears as positive.
-    """
-    return sum([1 for clause in clauses if literal in clause])
+        for idx in list(self.clauses.keys()):
+            clause = self.clauses[idx]
 
+            if literal in clause:
+                if value:
+                    self.delete_clause(idx)
+                else:
+                    self.delete_literal(idx, literal)
+            elif -literal in clause:
+                if not value:
+                    self.delete_clause(idx)
+                else:
+                    self.delete_literal(idx, -literal)
 
-def count_negative(clauses, literal):
-    """
-    Count the number of times a literal appears as negative.
-    """
-    return sum([1 for clause in clauses if -literal in clause])
+    def restore(self):
+        """
+        Undo the most recent stack of changes in the change log.
 
+        The change log is a stack of stacks; the top element of this
+        stack is removed and its operations are reversed.
+        """
+        log_entry = self.change_log.pop()
 
-def davis_putnam(clauses, assignment, check_tautology=False, simplify=False):
-    print(f"\rclauses: {len(clauses)} | assignment: {len(assignment)}")
+        while len(log_entry) > 0:
+            action, idx, content = log_entry.pop()
 
-    # Check if set of clauses is empty and therefore satisfied.
-    if len(clauses) is 0:
-        print("Set of clauses is empty.")
-        return True, assignment
+            if action is RC:
+                # Recover a clause.
+                self.clauses[idx] = content
+            elif action is RL:
+                # Recover a literal.
+                self.clauses[idx].add(content)
+            elif action is AA:
+                # Undo a variable assignment.
+                del self.assignment[abs(content)]
+            else:
+                raise ValueError(
+                    f"Cannot restore, action not recognized."
+                    f"({action}, {idx}, {content}")
 
-    # Check is set of clauses contains the empty clause.
-    for clause in clauses:
-        if len(clause) is 0:
-            print("Set of clauses contains empty clause.")
-            return False, assignment
+    def remove_tautologies(self):
+        for idx in list(self.dlauses.keys()):
+            clause = self.dlauses[idx]
 
-    # Check for tautologies and remove them.
-    if check_tautology:
-        clauses_no_taut = remove_tautologies(clauses)
-        if clauses != clauses_no_taut:
-            print("Removed tautologies")
-            return davis_putnam(clauses_no_taut, assignment)
+            for literal in clause:
+                if -literal in clause:
+                    self.delete_clause(idx)
+                    break
 
-    # Check for unit clauses.
-    clauses_no_units, assignment = remove_unit_clauses(clauses, assignment)
-    if clauses != clauses_no_units:
-        print("Found unit clauses")
-        return davis_putnam(clauses_no_units, assignment)
+    def unit_propagate(self):
+        global clauses
 
-    if simplify:
-        return False, assignment
+        for idx in list(self.clauses.keys()):
+            clause = self.clauses[idx]
 
-    '''
-    # Split at pure literals.
-    for pure_literal in detect_pure_literals(clauses):
-        print(f"Set {pure_literal} to True")
-        assignment[pure_literal] = True
+            if len(clause) is 1:
+                literal = list(clause)[0]
 
-        clauses_no_pure = set_literal(
-            clauses, assignment, pure_literal)
-        satisfied, assignment_ = davis_putnam(clauses_no_pure, assignment)
+                self.add_assignment(literal, value=True)
+                self.assign_literal(literal)
+
+                return self.dpll()
+
+    def get_variables(self):
+        variables = set()
+
+        for idx in self.clauses:
+            # clause = {abs(literal) for literal in self.clauses[idx]}
+            clause = self.clauses[idx]
+            variables = variables | clause
+
+        return variables
+
+    def get_containment(self):
+        """
+        Construct a dictionary mapping each literal to a list of
+        clauses that contain it.
+        """
+        contain = {}
+
+        for idx in self.clauses:
+            clause = self.clauses[idx]
+
+            for literal in clause:
+                if literal in contain:
+                    contain[literal].add(idx)
+                else:
+                    contain[literal] = {idx}
+
+        return contain
+
+    def dpll(self):
+        unfinished = True
+        while unfinished:
+            unfinished = False
+
+            if len(self.clauses) is 0:
+                # Set of clauses is empty.
+                return True
+
+            # Check for empty clauses.
+            for idx in self.clauses:
+                if len(self.clauses[idx]) is 0:
+                    # Set of clauses contains an empty clause.
+                    # print(f"Found empty clause: {idx}: {clauses[idx]}")
+                    return False
+
+            # Simplify the set of clauses by assigning the literals of
+            # unit clauses.
+            for idx in list(self.clauses.keys()):
+                clause = self.clauses[idx]
+
+                if len(clause) is 1:
+                    # print(f"Found unit clause {clause}")
+                    literal = list(clause)[0]
+
+                    # Add an assignment and simplify.
+                    self.add_assignment(literal, value=True)
+                    self.assign_literal(literal)
+
+                    # Make sure to keep checking for unit clauses until
+                    # they are all gone.
+                    unfinished = True
+                    break
+
+        # Select a literal to split.
+        # TODO: Try something a bit more challenging than a random split.
+        if random.random() < 0.2:
+            literal = random.choice(list(self.get_variables()))
+            value = random.choice([True, False])
+        else:
+            contains = self.get_containment()
+            occurences = {literal: len(contains[literal])
+                          for literal in contains}
+            literal = max(occurences, key=lambda key: occurences[key])
+            value = contains[literal] > contains[-literal]
+            print()
+
+        self.change_log.append([])
+
+        # print(f"Set {literal} to True")
+        self.add_assignment(literal, value)
+        self.assign_literal(literal)
+
+        satisfied = self.dpll()
 
         if satisfied:
-            return satisfied, assignment_
-        else:
-            print(f"Set {pure_literal} to False")
-            assignment[pure_literal] = False
+            return True
 
-            clauses_no_pure = set_literal(
-                clauses, assignment, pure_literal)
-            return davis_putnam(clauses_no_pure, assignment)
-    '''
+        self.restore()
+        self.change_log.append([])
 
-    # Perform split.
-    literals = set()
-    current = time.time()
-    for clause in clauses:
-        literals = literals | clause
+        # print(f"Set {literal} to False")
+        self.add_assignment(literal, not value)
 
-    cp = {literal: count_positive(clauses, literal) for literal in literals}
-    cn = {literal: count_negative(clauses, literal) for literal in literals}
-
-    selected_literal = None
-    for literal in literals:
-        if selected_literal is None:
-            selected_literal = literal
-        else:
-            combined_sum = cp[literal] + cn[literal]
-            largest_combined_sum = cp[selected_literal] + cn[selected_literal]
-
-            if combined_sum > largest_combined_sum:
-                selected_literal = literal
-
-    value = cp[selected_literal] > cn[selected_literal]
-    # assignment[selected_literal] = value
-    assignment = set_assignment(assignment, selected_literal, value)
-    clauses_split = set_literal(clauses, assignment, selected_literal)
-
-    if clauses_split != clauses:
-        print(f"Performed split at {selected_literal}={value}")
-        satisfied, assignment_ = davis_putnam(clauses_split, assignment,
-                                              simplify=True)
-
-        if not satisfied:
-            # assignment[selected_literal] = value
-            assignment = set_assignment(
-                assignment, selected_literal, not value)
-            clauses_split = set_literal(clauses, assignment, selected_literal)
-            return davis_putnam(clauses_split, assignment)
-        else:
-            return True, assignment_
-
-    print("Uh oh")
-    return False, assignment
+        return self.dpll()
 
 
 if __name__ == "__main__":
-    clauses = [{1, -2}, {2, 3}, {-3, 1}]
-    print(davis_putnam(clauses, {}, check_tautology=True))
-
-    print()
-
-    clauses = [{1, -3}, {1, -2, 3}, {2, 3, -1}, {-3, -1, 2}]
-    print(davis_putnam(clauses, {}, check_tautology=True))
-
     example = load_example()
-    print(len(example))
+    solver = Solver(example)
 
-    try:
-        satisfied, assignment = davis_putnam(example, {})
-        print(satisfied, assignment)
-        print(draw_assignment(assignment))
-    except RecursionError:
-        pass
+    satisfied = solver.dpll()
+
+    print(satisfied)
+    draw = draw_assignment(solver.assignment)
+    entries = [int(char) for char in draw if char in '123456789']
+    if check_sudoku(entries):
+        print("Sudoku is correct")
+
+    successes = []
+    n_games = 40
+
+    for idx, game in tqdm(enumerate(load_games()), total=n_games):
+        solver = Solver(game)
+        change_log = [[]]
+        assignment = {}
+        contain = {}  # All clauses that contain a certain literal.
+
+        try:
+            satisfied = solver.dpll()
+        except RecursionError:
+            state = 'error'
+        else:
+            if satisfied:
+                state = 'success'
+            else:
+                state = 'failure'
+
+        successes.append(state)
+
+        if idx >= n_games:
+            break
+
+    success_rate = sum([state == 'success' for state
+                        in successes]) / (idx + 1)
+    failure_rate = sum([state == 'failure' for satisfied
+                        in successes]) / (idx + 1)
+
+    print(f"\nSuccess rate: {success_rate * 100:0.1f}% | "
+          f"Failure rate: {failure_rate * 100:0.1f}%")
