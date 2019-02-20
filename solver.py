@@ -2,6 +2,7 @@ import random
 
 from tqdm import tqdm
 
+from splits import random_split
 from sudoku import load_games, load_example, draw_assignment, check_sudoku
 
 RC = 0  # 'Remove Clause'
@@ -10,11 +11,14 @@ AA = 2  # 'Add Assignment'
 
 
 class Solver():
-    def __init__(self, clauses):
+    def __init__(self, clauses, split=random_split):
         self.clauses = self.create_clauses(*clauses)
         self.change_log = [[]]
         self.assignment = {}
         self.contain = self.get_containment()
+
+        self.split = random_split
+        self.splits = 0
 
     def create_clauses(self, *clauses):
         """
@@ -203,20 +207,7 @@ class Solver():
                     break
 
         # Select a literal to split.
-        # TODO: Try something a bit more challenging than a random split.
-        if random.random() < 0:
-            literal = random.choice(list(self.get_variables()))
-            value = random.choice([True, False])
-        else:
-            literal = list(self.get_variables())[0]
-            value = True
-            '''
-            contains = self.get_containment()
-            occurences = {literal: len(contains[literal])
-                          for literal in contains}
-            literal = max(occurences, key=lambda key: occurences[key])
-            value = contains[literal] > contains[-literal]
-            '''
+        literal, value = self.split(self)
 
         self.change_log.append([])
 
@@ -229,8 +220,10 @@ class Solver():
         if satisfied:
             return True
 
+        # Restore the state to the previous split to prepare for the
+        # next one.
         self.restore()
-        # self.change_log.append([])
+        self.splits += 1
 
         # print(f"Set {literal} to False")
         self.add_assignment(literal, not value)
@@ -253,6 +246,7 @@ if __name__ == "__main__":
 
     successes = []
     correct = []
+    splits = []
     n_games = 40
 
     for idx, game in tqdm(enumerate(load_games()), total=n_games):
@@ -272,6 +266,7 @@ if __name__ == "__main__":
                 state = 'failure'
 
         successes.append(state)
+        splits.append(solver.splits)
 
         if idx >= n_games:
             break
@@ -280,6 +275,8 @@ if __name__ == "__main__":
                         in successes]) / len(successes)
     failure_rate = sum([state == 'failure' for state
                         in successes]) / len(successes)
+    split_rate = sum(splits) / len(splits)
 
     print(f"\nSuccess rate: {success_rate * 100:0.1f}% | "
           f"Failure rate: {failure_rate * 100:0.1f}%")
+    print(f"Average number of splits: {split_rate:.2f}")
