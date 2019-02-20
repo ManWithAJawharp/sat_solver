@@ -20,6 +20,10 @@ class Solver():
         self.split = random_split
         self.splits = 0
 
+    def solve(self):
+        self.remove_tautologies()
+        return self.dpll()
+
     def create_clauses(self, *clauses):
         """
         Convert a list of clauses to a dictionary where each entry's key
@@ -78,20 +82,28 @@ class Solver():
         value = self.get_assignment(literal)
 
         # TODO: Optimize using self.contain.
+        # clauses = self.contain[literal]
+        clauses = self.get_containment()[literal]
 
-        for idx in list(self.clauses.keys()):
-            clause = self.clauses[idx]
+        for idx in clauses:
+            if value:
+                self.delete_clause(idx)
+            else:
+                self.delete_literal(idx, literal)
 
-            if literal in clause:
-                if value:
-                    self.delete_clause(idx)
-                else:
-                    self.delete_literal(idx, literal)
-            elif -literal in clause:
+        # del self.contain[literal]
+
+        # not_clauses = self.contain[-literal]
+        try:
+            not_clauses = self.get_containment()[-literal]
+
+            for idx in not_clauses:
                 if not value:
                     self.delete_clause(idx)
                 else:
                     self.delete_literal(idx, -literal)
+        except KeyError:
+            pass
 
     def restore(self):
         """
@@ -120,8 +132,8 @@ class Solver():
                     f"({action}, {idx}, {content}")
 
     def remove_tautologies(self):
-        for idx in list(self.dlauses.keys()):
-            clause = self.dlauses[idx]
+        for idx in list(self.clauses.keys()):
+            clause = self.clauses[idx]
 
             for literal in clause:
                 if -literal in clause:
@@ -236,7 +248,7 @@ if __name__ == "__main__":
     example = load_example()
     solver = Solver(example)
 
-    satisfied = solver.dpll()
+    satisfied = solver.solve()
 
     print(satisfied)
     draw = draw_assignment(solver.assignment)
@@ -256,7 +268,7 @@ if __name__ == "__main__":
         contain = {}  # All clauses that contain a certain literal.
 
         try:
-            satisfied = solver.dpll()
+            satisfied = solver.solve()
         except RecursionError:
             state = 'error'
         else:
