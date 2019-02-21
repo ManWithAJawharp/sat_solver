@@ -1,7 +1,5 @@
-from tqdm import tqdm
-
 from splits import random_split
-from sudoku import load_games, load_example, draw_assignment, check_sudoku
+from sudoku import load_all_games, load_example, draw_assignment, check_sudoku
 
 RC = 0  # 'Remove Clause'
 RL = 1  # 'Remove Literal'
@@ -285,9 +283,9 @@ if __name__ == "__main__":
     successes = []
     correct = []
     splits = []
-    n_games = 1000
+    n_games = 17445
 
-    for idx, game in tqdm(enumerate(load_games()), total=n_games):
+    for idx, game in enumerate(load_all_games()):
         solver = Solver(game)
         change_log = [[]]
         assignment = {}

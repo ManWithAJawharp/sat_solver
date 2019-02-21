@@ -1,8 +1,14 @@
+from tqdm import tqdm
 from copy import deepcopy
 
 EXAMPLE_PATH = 'example.txt'
 RULES_PATH = 'sudoku_rules.txt'
-SUDOKU_PATH = '1000_sudokus.txt'
+# SUDOKU_PATH = '1000_sudokus.txt'
+# SUDOKU_PATH = 'damnhard.sdk.txt'
+SUDOKU_PATH = 'subig20.sdk.txt'
+PATHS = ['damnhard.sdk.txt', 'top91.sdk.txt', 'top95.sdk.txt',
+         'top100.sdk.txt', 'top870.sdk.txt', 'top2365.sdk.txt',
+         '1000_sudokus.txt', 'top2365.sdk.txt', 'subig20.sdk.txt']
 
 
 def load_raw_sudokus(path):
@@ -67,7 +73,7 @@ def load_dimacs(path):
     return sorted(clauses)
 
 
-def load_games(example=False):
+def load_games(path):
     """
     Load sudoku games as lists of clauses from raw puzzles and the ruleset.
 
@@ -78,14 +84,24 @@ def load_games(example=False):
     """
     rules = load_dimacs(RULES_PATH)
 
-    if example:
-        example = load_dimacs(EXAMPLE_PATH)
+    for raw in load_raw_sudokus(path):
+        sudoku = read_raw_sudoku(raw)
 
-        yield deepcopy(example + rules)
+        yield deepcopy(sudoku + rules)
 
-    for raw in load_raw_sudokus(SUDOKU_PATH):
 
-        yield deepcopy(read_raw_sudoku(raw) + rules)
+def load_all_games():
+    for path in PATHS:
+        with open(path) as lines:
+            for idx, line in enumerate(lines):
+                pass
+
+            lines = idx + 1
+
+        print(f"Loading {path} ({lines}) lines)")
+
+        for game in tqdm(load_games(path), total=lines):
+            yield game
 
 
 def load_example():
@@ -97,10 +113,10 @@ def load_example():
     list of set
         A list of clauses. Each clause is a set of variables.
     """
-    for game in load_games(True):
-        break
+    rules = load_dimacs(RULES_PATH)
+    example = load_dimacs(EXAMPLE_PATH)
 
-    return game
+    return deepcopy(example + rules)
 
 
 def draw_assignment(assignment):
@@ -127,7 +143,6 @@ def draw_assignment(assignment):
                         else:
                             board[idx][jdx] = key[1:]
                             break
-                #print(literals)
 
     board = "\n".join(["|".join([board[row][col] for col in range(9)]) for row
                       in range(9)])
