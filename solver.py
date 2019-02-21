@@ -1,5 +1,3 @@
-import random
-
 from tqdm import tqdm
 
 from splits import random_split
@@ -13,19 +11,27 @@ CC = 3  # 'Clean Containment'
 
 class Solver():
     def __init__(self, clauses, split=random_split):
-        self.clauses = self.create_clauses(*clauses)
+        self.clauses = self._create_clauses(*clauses)
         self.change_log = [[]]
         self.assignment = {}
-        self.containment = self.get_containment()
+        self.containment = self._get_containment()
 
-        self.split = random_split
+        self.split = split
         self.splits = 0
 
     def solve(self):
-        self.remove_tautologies()
-        return self.dpll()
+        """
+        Run the solver.
 
-    def create_clauses(self, *clauses):
+        Returns
+        -------
+        bool
+            True if a solution was found, False otherwise.
+        """
+        # self._remove_tautologies()
+        return self._dpll()
+
+    def _create_clauses(self, *clauses):
         """
         Convert a list of clauses to a dictionary where each entry's key
         is the clause's index.
@@ -34,7 +40,7 @@ class Solver():
 
         return clauses
 
-    def add_assignment(self, literal, value):
+    def _add_assignment(self, literal, value):
         """
         Add an assignment
         """
@@ -46,7 +52,7 @@ class Solver():
 
         self.change_log[-1].append((AA, literal, literal))
 
-    def get_assignment(self, literal):
+    def _get_assignment(self, literal):
         """
         Retrieve the assignment of a literal.
         """
@@ -57,7 +63,7 @@ class Solver():
         else:
             return value
 
-    def delete_clause(self, idx):
+    def _delete_clause(self, idx):
         """
         Delete a clause from the set of clauses by its index.
         """
@@ -66,7 +72,7 @@ class Solver():
         self.change_log[-1].append((RC, idx, clause))
         del self.clauses[idx]
 
-    def delete_literal(self, idx, literal):
+    def _delete_literal(self, idx, literal):
         """
         Delete a literal from a clause.
 
@@ -75,52 +81,57 @@ class Solver():
         self.clauses[idx].remove(literal)
         self.change_log[-1].append((RL, idx, literal))
 
-    def clean_containment(self, idx, literal):
+    def _clean_containment(self, idx, literal):
         """
         Make a literal not point to a certain clause anymore through
         the containment dictionary.
+
+        Parameters
+        ----------
+        idx : int
+            Index of the clause.
+        literal : int
+            Index of the literal.
         """
         self.containment[literal].remove(idx)
 
         self.change_log[-1].append((CC, idx, literal))
 
-    def assign_literal(self, literal):
+    def _assign_literal(self, literal):
         """
         Simplify the set of clauses by removing references to a assigned
         literal and its negations.
         """
-        value = self.get_assignment(literal)
+        value = self._get_assignment(literal)
 
         if -literal in self.containment:
             not_clauses = set(self.containment[-literal])
 
             for idx in not_clauses:
-                self.clean_containment(idx, -literal)
+                self._clean_containment(idx, -literal)
 
                 if idx not in self.clauses:
                     continue
 
                 if not value:
-                    self.delete_clause(idx)
+                    self._delete_clause(idx)
                 else:
-                    self.delete_literal(idx, -literal)
+                    self._delete_literal(idx, -literal)
 
         clauses = set(self.containment[literal])
 
         for idx in clauses:
-            self.clean_containment(idx, literal)
+            self._clean_containment(idx, literal)
 
             if idx not in self.clauses:
                 continue
 
             if value:
-                self.delete_clause(idx)
+                self._delete_clause(idx)
             else:
-                self.delete_literal(idx, literal)
+                self._delete_literal(idx, literal)
 
-        # del self.contain[literal]
-
-    def restore(self):
+    def _restore(self):
         """
         Undo the most recent stack of changes in the change log.
 
@@ -148,17 +159,17 @@ class Solver():
                     f"Cannot restore, action not recognized."
                     f"({action}, {idx}, {content}")
 
-    def remove_tautologies(self):
+    def _remove_tautologies(self):
         for idx in list(self.clauses.keys()):
             clause = self.clauses[idx]
 
             for literal in clause:
                 if -literal in clause:
-                    self.delete_clause(idx, -literal)
-                    self.clean_containment(idx, -literal)
+                    self._delete_clause(idx, -literal)
+                    self._clean_containment(idx, -literal)
                     break
 
-    def unit_propagate(self):
+    def _unit_propagate(self):
         global clauses
 
         for idx in list(self.clauses.keys()):
@@ -167,12 +178,15 @@ class Solver():
             if len(clause) is 1:
                 literal = list(clause)[0]
 
-                self.add_assignment(literal, value=True)
-                self.assign_literal(literal)
+                self._add_assignment(literal, value=True)
+                self._assign_literal(literal)
 
                 return self.dpll()
 
-    def get_variables(self):
+    def _get_variables(self):
+        """
+        Return a set of all literals currently in the set of clauses.
+        """
         variables = set()
 
         for idx in self.clauses:
@@ -182,7 +196,7 @@ class Solver():
 
         return variables
 
-    def get_containment(self):
+    def _get_containment(self):
         """
         Construct a dictionary mapping each literal to a list of
         clauses that contain it.
@@ -200,9 +214,7 @@ class Solver():
 
         return containment
 
-    def dpll(self):
-        # print(len(self.clauses))
-
+    def _dpll(self):
         unfinished = True
         while unfinished:
             unfinished = False
@@ -215,7 +227,6 @@ class Solver():
             for idx in self.clauses:
                 if len(self.clauses[idx]) is 0:
                     # Set of clauses contains an empty clause.
-                    # print(f"Found empty clause: {idx}: {clauses[idx]}")
                     return False
 
             # Simplify the set of clauses by assigning the literals of
@@ -224,12 +235,11 @@ class Solver():
                 clause = self.clauses[idx]
 
                 if len(clause) is 1:
-                    # print(f"Found unit clause {clause}")
                     literal = list(clause)[0]
 
                     # Add an assignment and simplify.
-                    self.add_assignment(literal, value=True)
-                    self.assign_literal(literal)
+                    self._add_assignment(literal, value=True)
+                    self._assign_literal(literal)
 
                     # Make sure to keep checking for unit clauses until
                     # they are all gone.
@@ -241,25 +251,23 @@ class Solver():
 
         self.change_log.append([])
 
-        # print(f"Set {literal} to True")
-        self.add_assignment(literal, value)
-        self.assign_literal(literal)
+        self._add_assignment(literal, value)
+        self._assign_literal(literal)
 
-        satisfied = self.dpll()
+        satisfied = self._dpll()
 
         if satisfied:
             return True
 
         # Restore the state to the previous split to prepare for the
         # next one.
-        self.restore()
+        self._restore()
         self.splits += 1
 
-        # print(f"Set {literal} to False")
-        self.add_assignment(literal, not value)
-        self.assign_literal(literal)
+        self._add_assignment(literal, not value)
+        self._assign_literal(literal)
 
-        return self.dpll()
+        return self._dpll()
 
 
 if __name__ == "__main__":
