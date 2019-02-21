@@ -8,6 +8,7 @@ from sudoku import load_games, load_example, draw_assignment, check_sudoku
 RC = 0  # 'Remove Clause'
 RL = 1  # 'Remove Literal'
 AA = 2  # 'Add Assignment'
+CC = 3  # 'Clean Containment'
 
 
 class Solver():
@@ -15,7 +16,7 @@ class Solver():
         self.clauses = self.create_clauses(*clauses)
         self.change_log = [[]]
         self.assignment = {}
-        self.contain = self.get_containment()
+        self.containment = self.get_containment()
 
         self.split = random_split
         self.splits = 0
@@ -74,6 +75,15 @@ class Solver():
         self.clauses[idx].remove(literal)
         self.change_log[-1].append((RL, idx, literal))
 
+    def clean_containment(self, idx, literal):
+        """
+        Make a literal not point to a certain clause anymore through
+        the containment dictionary.
+        """
+        self.containment[literal].remove(idx)
+
+        self.change_log[-1].append((CC, idx, literal))
+
     def assign_literal(self, literal):
         """
         Simplify the set of clauses by removing references to a assigned
@@ -81,29 +91,34 @@ class Solver():
         """
         value = self.get_assignment(literal)
 
-        # TODO: Optimize using self.contain.
-        # clauses = self.contain[literal]
-        clauses = self.get_containment()[literal]
+        if -literal in self.containment:
+            not_clauses = set(self.containment[-literal])
+
+            for idx in not_clauses:
+                self.clean_containment(idx, -literal)
+
+                if idx not in self.clauses:
+                    continue
+
+                if not value:
+                    self.delete_clause(idx)
+                else:
+                    self.delete_literal(idx, -literal)
+
+        clauses = set(self.containment[literal])
 
         for idx in clauses:
+            self.clean_containment(idx, literal)
+
+            if idx not in self.clauses:
+                continue
+
             if value:
                 self.delete_clause(idx)
             else:
                 self.delete_literal(idx, literal)
 
         # del self.contain[literal]
-
-        # not_clauses = self.contain[-literal]
-        try:
-            not_clauses = self.get_containment()[-literal]
-
-            for idx in not_clauses:
-                if not value:
-                    self.delete_clause(idx)
-                else:
-                    self.delete_literal(idx, -literal)
-        except KeyError:
-            pass
 
     def restore(self):
         """
@@ -126,6 +141,8 @@ class Solver():
             elif action is AA:
                 # Undo a variable assignment.
                 del self.assignment[abs(content)]
+            elif action is CC:
+                self.containment[content].add(idx)
             else:
                 raise ValueError(
                     f"Cannot restore, action not recognized."
@@ -137,7 +154,8 @@ class Solver():
 
             for literal in clause:
                 if -literal in clause:
-                    self.delete_clause(idx)
+                    self.delete_clause(idx, -literal)
+                    self.clean_containment(idx, -literal)
                     break
 
     def unit_propagate(self):
@@ -169,18 +187,18 @@ class Solver():
         Construct a dictionary mapping each literal to a list of
         clauses that contain it.
         """
-        contain = {}
+        containment = {}
 
         for idx in self.clauses:
             clause = self.clauses[idx]
 
             for literal in clause:
-                if literal in contain:
-                    contain[literal].add(idx)
+                if literal in containment:
+                    containment[literal].add(idx)
                 else:
-                    contain[literal] = {idx}
+                    containment[literal] = {idx}
 
-        return contain
+        return containment
 
     def dpll(self):
         # print(len(self.clauses))
@@ -259,7 +277,7 @@ if __name__ == "__main__":
     successes = []
     correct = []
     splits = []
-    n_games = 40
+    n_games = 1000
 
     for idx, game in tqdm(enumerate(load_games()), total=n_games):
         solver = Solver(game)
