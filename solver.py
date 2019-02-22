@@ -1,4 +1,4 @@
-from splits import random_split
+from splits import random_split, jeroslow_lang
 from sudoku import load_all_games, load_example, draw_assignment, check_sudoku
 
 RC = 0  # 'Remove Clause'
@@ -8,11 +8,11 @@ CC = 3  # 'Clean Containment'
 
 
 class Solver():
-    def __init__(self, clauses, split=random_split):
+    def __init__(self, clauses, split=jeroslow_lang):
         self.clauses = self._create_clauses(*clauses)
         self.change_log = [[]]
         self.assignment = {}
-        self.containment = self._get_containment()
+        self.containment = {}
 
         self.split = split
         self.splits = 0
@@ -27,6 +27,7 @@ class Solver():
             True if a solution was found, False otherwise.
         """
         # self._remove_tautologies()
+        self.containment = self._get_containment()
         return self._dpll()
 
     def _create_clauses(self, *clauses):
@@ -214,6 +215,7 @@ class Solver():
 
     def _dpll(self):
         unfinished = True
+        
         while unfinished:
             unfinished = False
 
@@ -222,14 +224,12 @@ class Solver():
                 return True
 
             # Check for empty clauses.
-            for idx in self.clauses:
-                if len(self.clauses[idx]) is 0:
-                    # Set of clauses contains an empty clause.
-                    return False
+            if set() in self.clauses.values():
+                return False
 
             # Simplify the set of clauses by assigning the literals of
             # unit clauses.
-            for idx in list(self.clauses.keys()):
+            for idx in list(self.clauses):
                 clause = self.clauses[idx]
 
                 if len(clause) is 1:
@@ -283,29 +283,24 @@ if __name__ == "__main__":
     successes = []
     correct = []
     splits = []
-    n_games = 17445
 
-    for idx, game in enumerate(load_all_games()):
-        solver = Solver(game)
-        change_log = [[]]
-        assignment = {}
-        contain = {}  # All clauses that contain a certain literal.
-
-        try:
+    try:
+        for idx, game in enumerate(load_all_games()):
+            solver = Solver(game)
             satisfied = solver.solve()
-        except RecursionError:
-            state = 'error'
-        else:
-            if satisfied:
+            change_log = [[]]
+            draw = draw_assignment(solver.assignment)
+            entries = [int(char) for char in draw if char in '123456789']
+
+            if satisfied and check_sudoku(entries):
                 state = 'success'
             else:
                 state = 'failure'
 
-        successes.append(state)
-        splits.append(solver.splits)
-
-        if idx >= n_games:
-            break
+            successes.append(state)
+            splits.append(solver.splits)
+    except KeyboardInterrupt:
+        pass
 
     success_rate = sum([state == 'success' for state
                         in successes]) / len(successes)

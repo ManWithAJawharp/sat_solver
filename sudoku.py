@@ -2,7 +2,7 @@ from tqdm import tqdm
 from copy import deepcopy
 
 EXAMPLE_PATH = 'example.txt'
-RULES_PATH = 'sudoku_rules.txt'
+RULES_PATH = 'sudoku-rules.txt'
 # SUDOKU_PATH = '1000_sudokus.txt'
 # SUDOKU_PATH = 'damnhard.sdk.txt'
 SUDOKU_PATH = 'subig20.sdk.txt'
@@ -13,11 +13,36 @@ PATHS = ['damnhard.sdk.txt', 'top91.sdk.txt', 'top95.sdk.txt',
 
 def load_raw_sudokus(path):
     """
-    Generates raw encoded sudokus.
+    Loads raw encoded sudokus from a file.
+
+    Yields
+    ------
+    str
+        A description of a sudoku puzzle.
+        The puzzle is laid out in a single line and contains periods (.)
+        for empty fields and numbers otherwise.
     """
     with open(path) as text:
         for line in text:
             yield line.strip()
+
+
+def txt2dimacs(raw, name):
+    """
+    Save a raw sudoku game to a DIMACS file.
+    """
+    with open(name, 'w') as output:
+        for idx, character in enumerate(raw):
+            if character != '.':
+                col = idx % 9
+                row = (idx - col) // 9
+
+                line = f"{row}{col}{character} 0\n"
+                output.write(line)
+
+        with open(RULES_PATH) as rule_file:
+            for rule in rule_file:
+                output.write(rule)
 
 
 def read_raw_sudoku(raw):
@@ -202,7 +227,5 @@ def check_sudoku(entries):
 
 
 if __name__ == "__main__":
-    example = load_example()
-
-    assignment = create_assignment(example)
-    print(draw_assignment(assignment))
+    for idx, raw in enumerate(load_raw_sudokus(PATHS[-1])):
+        txt2dimacs(raw, f"sudoku_nr_{idx+1}")
