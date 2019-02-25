@@ -13,7 +13,7 @@ def naive_split(solver):
     """
     variables = [key for key, value in solver.containment.items()
                  if len(value) > 0]
-    literal = variables[0]
+    literal = variables[-1]
     value = True
 
     return literal, value
@@ -26,9 +26,27 @@ def random_split(solver):
     variables = [key for key, value in solver.containment.items()
                  if len(value) > 0]
     literal = random.choice(variables)
-    value = random.choice([True, False])
+    # value = random.choice([True, False])
+    value = True
 
     return literal, value
+
+
+def max_occurrence(solver):
+    occurrences = {}
+
+    for clause in solver.clauses.values():
+        for literal in clause:
+            if literal not in occurrences:
+                occurrences[literal] = 1
+            else:
+                occurrences[literal] += 1
+
+    literal = max(occurrences, key=lambda key: occurrences[key])
+
+    value = occurrences[abs(literal)] < occurrences[-abs(literal)]
+
+    return abs(literal), value
 
 
 def jeroslow_lang(solver):
@@ -37,8 +55,19 @@ def jeroslow_lang(solver):
     j_values = {}
 
     for literal, indices in solver.containment.items():
-        print(literal, indices)
-        J = sum([2 ** -len(clauses[idx]) for idx in indices])
-        print(J)
+        J = 0
+        for idx in indices:
+            if idx not in clauses:
+                continue
 
+            J += 2 ** -len(clauses[idx])
+
+        # print(J)
         j_values[literal] = J
+
+    literal = max(
+        j_values, key=lambda key: j_values[key] + j_values[-key])
+
+    value = j_values[literal] < j_values[-literal]
+
+    return literal, value

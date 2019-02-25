@@ -1,4 +1,4 @@
-from splits import random_split, jeroslow_lang
+from splits import naive_split, random_split, max_occurrence, jeroslow_lang
 from sudoku import load_all_games, load_example, draw_assignment, check_sudoku
 
 RC = 0  # 'Remove Clause'
@@ -8,7 +8,7 @@ CC = 3  # 'Clean Containment'
 
 
 class Solver():
-    def __init__(self, clauses, split=jeroslow_lang):
+    def __init__(self, clauses, split=random_split):
         self.clauses = self._create_clauses(*clauses)
         self.change_log = [[]]
         self.assignment = {}
@@ -26,7 +26,7 @@ class Solver():
         bool
             True if a solution was found, False otherwise.
         """
-        # self._remove_tautologies()
+        self._remove_tautologies()
         self.containment = self._get_containment()
         return self._dpll()
 
@@ -277,8 +277,9 @@ if __name__ == "__main__":
     print(satisfied)
     draw = draw_assignment(solver.assignment)
     entries = [int(char) for char in draw if char in '123456789']
-    if check_sudoku(entries):
+    if satisfied and check_sudoku(entries):
         print("Sudoku is correct")
+        # print(solver.splits)
 
     successes = []
     correct = []
@@ -299,6 +300,7 @@ if __name__ == "__main__":
 
             successes.append(state)
             splits.append(solver.splits)
+            # print(solver.splits)
     except KeyboardInterrupt:
         pass
 
