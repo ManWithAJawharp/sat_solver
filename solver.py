@@ -267,42 +267,8 @@ class GreedySolver(Solver):
         self.max_retries = 20
         self.max_flips = 10000
 
-        self.score_log = []
-
     def solve(self):
-        self._remove_tautologies()
-
-        unfinished = True
-
-        while unfinished:
-            unfinished = False
-
-            if len(self.clauses) is 0:
-                # Set of clauses is empty.
-                return True
-
-            # Check for empty clauses.
-            for idx in self.clauses:
-                if len(self.clauses[idx]) is 0:
-                    # Set of clauses contains an empty clause.
-                    return False
-
-            # Simplify the set of clauses by assigning the literals of
-            # unit clauses.
-            for idx in list(self.clauses.keys()):
-                clause = self.clauses[idx]
-
-                if len(clause) is 1:
-                    literal = list(clause)[0]
-
-                    # Add an assignment and simplify.
-                    self._add_assignment(literal, value=True)
-                    self._assign_literal(literal)
-
-                    # Make sure to keep checking for unit clauses until
-                    # they are all gone.
-                    unfinished = True
-                    break
+        # self._remove_tautologies()
 
         return self.gsat()
 
@@ -377,7 +343,7 @@ class GreedySolver(Solver):
             for idx in range(self.max_flips):
                 sat, score = self.check_sat()
 
-                sys.stdout.write(f"\r{idx}: {score}/{len(self.containment)}")
+                sys.stdout.write(f"\r{idx:05d}: {score}/{len(self.clauses)} ")
                 sys.stdout.flush()
 
                 if sat:
@@ -398,7 +364,13 @@ class GreedySolver(Solver):
                     elif score is best_score:
                         ties.append(literal)
 
-                literal = random.choice(ties)
+                if random.random() > 0.2:
+                    literal = random.choice(ties)
+                    best_score = self.predict_score(literal)
+                else:
+                    literal = random.choice(list(self._get_variables()))
+
+                print(literal, best_score)
 
                 value = self._get_assignment(literal)
                 self._add_assignment(literal, not value)
@@ -406,6 +378,82 @@ class GreedySolver(Solver):
             print("Restart")
 
         return False
+
+
+class WalkSAT(Solver):
+    def __init__(self, clauses):
+        self.unsat_clauses = self._create_clauses(*clauses)
+        self.sat_clauses = {}
+
+        self.containment = self._get_containment()
+        self.assignment = self._guess_assignment()
+
+    def solve(self):
+        pass
+
+    def _get_containment(self):
+        containment = {}
+
+        for idx in self.unsat_clauses:
+            clause = self.unsat_clauses[idx]
+
+            for literal in clause:
+                # literal = abs(literal)
+
+                if literal not in containment:
+                    containment[literal] = {idx}
+                else:
+                    containment[literal].add(idx)
+
+    def _guess_assignment(self):
+        assignment = {}
+
+        for literal in self.containment:
+            literal = abs(literal)
+
+            assignment[literal] = random.random() > 0.5
+
+        return assignment
+
+    def _predict_score(self, literal):
+        clauses = self.containment[literal]
+        sat_clauses = 0
+
+        for idx in clauses:
+            clause = clauses[idx]
+            sat_literals = 0
+
+            for literal_ in clause:
+                if self._get_assignment(literal_):
+                    sat_literals += 1
+
+            if sat_literals is 0:
+                sat_clauses += 1
+            elif sat_literals is 1 and self._get_assignment(literal):
+                sat_clauses -= 1
+
+        return sat_clauses
+
+
+def generate_random_problems(n, variables=100, clause_size=3,
+                             num_clauses=1000):
+    for problem in range(n):
+        clauses = []
+
+        for idx in range(num_clauses):
+            clause = set()
+
+            for _ in range(clause_size):
+                literal = random.randint(1, variables)
+
+                if random.random() < 0.5:
+                    literal *= -1
+
+                clause.add(literal)
+
+            clauses.append(clause)
+
+        yield clauses
 
 
 def test_dpll():
@@ -455,6 +503,11 @@ def test_dpll():
 
 
 def test_gsat():
+    for problem in generate_random_problems(10):
+        solver = GreedySolver(problem)
+        print(solver.solve())
+
+
     example = load_example()
     solver = GreedySolver(example)
     satisfied = solver.solve()
@@ -475,6 +528,20 @@ def test_gsat():
     '''
 
 
+def test_walksat():
+    example = load_example()
+    solver = WalkSAT(example)
+    satisfied = solver.solve()
+
+    print(satisfied)
+    draw = draw_assignment(solver.assignment)
+    entries = [int(char) for char in draw if char in '123456789']
+    if check_sudoku(entries):
+        print("Sudoku is correct")
+    print(draw)
+
+
 if __name__ == "__main__":
+    test_walksat()
     test_gsat()
     # test_dpll()
