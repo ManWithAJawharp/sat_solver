@@ -1,3 +1,4 @@
+import sys
 import random
 # import matplotlib.pyplot as plt
 
@@ -172,20 +173,6 @@ class Solver():
                     self._clean_containment(idx, -literal)
                     break
 
-    def _unit_propagate(self):
-        global clauses
-
-        for idx in list(self.clauses.keys()):
-            clause = self.clauses[idx]
-
-            if len(clause) is 1:
-                literal = list(clause)[0]
-
-                self._add_assignment(literal, value=True)
-                self._assign_literal(literal)
-
-                return self.dpll()
-
     def _get_variables(self):
         """
         Return a set of all literals currently in the set of clauses.
@@ -284,6 +271,39 @@ class GreedySolver(Solver):
 
     def solve(self):
         self._remove_tautologies()
+
+        unfinished = True
+
+        while unfinished:
+            unfinished = False
+
+            if len(self.clauses) is 0:
+                # Set of clauses is empty.
+                return True
+
+            # Check for empty clauses.
+            for idx in self.clauses:
+                if len(self.clauses[idx]) is 0:
+                    # Set of clauses contains an empty clause.
+                    return False
+
+            # Simplify the set of clauses by assigning the literals of
+            # unit clauses.
+            for idx in list(self.clauses.keys()):
+                clause = self.clauses[idx]
+
+                if len(clause) is 1:
+                    literal = list(clause)[0]
+
+                    # Add an assignment and simplify.
+                    self._add_assignment(literal, value=True)
+                    self._assign_literal(literal)
+
+                    # Make sure to keep checking for unit clauses until
+                    # they are all gone.
+                    unfinished = True
+                    break
+
         return self.gsat()
 
     def guess_assignment(self):
@@ -350,12 +370,15 @@ class GreedySolver(Solver):
 
     def gsat(self):
         self.containment = self._get_containment()
+
         for iteration in range(self.max_retries):
             self.guess_assignment()
 
             for idx in range(self.max_flips):
                 sat, score = self.check_sat()
-                print(f"{idx}: {score}/{len(self.clauses)}")
+
+                sys.stdout.write(f"\r{idx}: {score}/{len(self.containment)}")
+                sys.stdout.flush()
 
                 if sat:
                     return True
@@ -376,10 +399,9 @@ class GreedySolver(Solver):
                         ties.append(literal)
 
                 literal = random.choice(ties)
+
                 value = self._get_assignment(literal)
                 self._add_assignment(literal, not value)
-
-                print(ties, best_score, literal)
 
             print("Restart")
 
