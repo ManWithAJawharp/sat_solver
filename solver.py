@@ -1,3 +1,8 @@
+import random
+# import matplotlib.pyplot as plt
+
+from heapq import nlargest
+
 from splits import random_split
 from sudoku import load_all_games, load_example, draw_assignment, check_sudoku
 
@@ -26,7 +31,7 @@ class Solver():
         bool
             True if a solution was found, False otherwise.
         """
-        # self._remove_tautologies()
+        self._remove_tautologies()
         return self._dpll()
 
     def _create_clauses(self, *clauses):
@@ -268,7 +273,120 @@ class Solver():
         return self._dpll()
 
 
-if __name__ == "__main__":
+class GreedySolver(Solver):
+    def __init__(self, clauses):
+        super(GreedySolver, self).__init__(clauses)
+
+        self.max_retries = 20
+        self.max_flips = 10000
+
+        self.score_log = []
+
+    def solve(self):
+        self._remove_tautologies()
+        return self.gsat()
+
+    def guess_assignment(self):
+        """
+        Guess an initial assignment.
+        """
+        variables = self._get_variables()
+
+        for variable in variables:
+            if variable < 0:
+                continue
+
+            if variable in self.assignment and random.random() > 0.9:
+                self.assignment[variable] = not self.assignment[variable]
+
+            self.assignment[variable] = random.random() > 0.85
+
+        self.change_log = [[]]
+
+    def check_sat(self):
+        sat_score = 0
+        sat = True
+
+        for idx in self.clauses:
+            clause = self.clauses[idx]
+
+            for literal in clause:
+                if self._get_assignment(literal):
+                    sat_score += 1
+                    break
+            else:
+                sat = False
+
+        return sat, sat_score
+
+    def predict_score(self, literal):
+        """
+        Predict number of satisfied clauses after flipping a literal.
+        """
+        score = 0
+
+        for idx in self.containment[literal]:
+            clause = self.clauses[idx]
+
+            # Count the number of satisfied literals.
+            sat_literals = 0
+            for lit in clause:
+                if self._get_assignment(lit):
+                    sat_literals += 1
+
+            if sat_literals is 0:
+                # If before no literals where satisfied, flipping one will
+                # satisfy the clause.
+                score += 1
+            elif sat_literals is 1 and self._get_assignment(literal):
+                # If the literal is the only satisfied literal in the clause,
+                # flipping it will make the whole clause unsatisfied.
+                score -= 1
+
+        if literal > 0:
+            return score + self.predict_score(-literal)
+        else:
+            return score
+
+    def gsat(self):
+        self.containment = self._get_containment()
+        for iteration in range(self.max_retries):
+            self.guess_assignment()
+
+            for idx in range(self.max_flips):
+                sat, score = self.check_sat()
+                print(f"{idx}: {score}/{len(self.clauses)}")
+
+                if sat:
+                    return True
+
+                best_score = -1e10
+                ties = []
+
+                for literal in self.containment:
+                    if literal < 0:
+                        continue
+
+                    score = self.predict_score(literal)
+
+                    if score > best_score:
+                        best_score = score
+                        ties = [literal]
+                    elif score is best_score:
+                        ties.append(literal)
+
+                literal = random.choice(ties)
+                value = self._get_assignment(literal)
+                self._add_assignment(literal, not value)
+
+                print(ties, best_score, literal)
+
+            print("Restart")
+
+        return False
+
+
+def test_dpll():
     example = load_example()
     solver = Solver(example)
 
@@ -281,15 +399,11 @@ if __name__ == "__main__":
         print("Sudoku is correct")
 
     successes = []
-    correct = []
     splits = []
     n_games = 17445
 
     for idx, game in enumerate(load_all_games()):
         solver = Solver(game)
-        change_log = [[]]
-        assignment = {}
-        contain = {}  # All clauses that contain a certain literal.
 
         try:
             satisfied = solver.solve()
@@ -316,3 +430,29 @@ if __name__ == "__main__":
     print(f"\nSuccess rate: {success_rate * 100:0.1f}% | "
           f"Failure rate: {failure_rate * 100:0.1f}%")
     print(f"Average number of splits: {split_rate:.2f}")
+
+
+def test_gsat():
+    example = load_example()
+    solver = GreedySolver(example)
+    satisfied = solver.solve()
+
+    print(satisfied)
+    draw = draw_assignment(solver.assignment)
+    entries = [int(char) for char in draw if char in '123456789']
+    if check_sudoku(entries):
+        print("Sudoku is correct")
+    print(draw)
+
+    '''
+    plt.title("GSAT progress")
+    plt.plot(solver.score_log)
+    plt.xlabel("Flips")
+    plt.ylabel("Satisfied clauses")
+    plt.show()
+    '''
+
+
+if __name__ == "__main__":
+    test_gsat()
+    # test_dpll()
