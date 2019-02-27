@@ -2,8 +2,6 @@ import sys
 import random
 # import matplotlib.pyplot as plt
 
-from heapq import nlargest
-
 from splits import random_split
 from sudoku import load_all_games, load_example, draw_assignment, check_sudoku
 
@@ -60,7 +58,10 @@ class Solver():
         """
         Retrieve the assignment of a literal.
         """
-        value = self.assignment[abs(literal)]
+        try:
+            value = self.assignment[abs(literal)]
+        except KeyError:
+            return False
 
         if literal < 0:
             return not value
@@ -382,47 +383,81 @@ class GreedySolver(Solver):
 
 class WalkSAT(Solver):
     def __init__(self, clauses):
-        self.unsat_clauses = self._create_clauses(*clauses)
-        self.sat_clauses = {}
+        self.clauses = self._create_clauses(*clauses)
+
+        self.max_tries = 10
+        self.max_flips = 10000
 
         self.containment = self._get_containment()
         self.assignment = self._guess_assignment()
+        print(self.assignment)
 
     def solve(self):
-        pass
+        for retry in range(self.max_tries):
+            self.assignment = self._guess_assignment()
+
+            for flip in range(self.max_flips):
+                sat, score = self._check_sat()
+
+                if sat:
+                    return True
+
+                if random.random() < 0.5:
+                    self._random_walk()
+                else:
+                    self._flip_best_literal()
+
+                # print(score)
+
+        return sat
 
     def _get_containment(self):
         containment = {}
 
-        for idx in self.unsat_clauses:
-            clause = self.unsat_clauses[idx]
+        for idx in self.clauses:
+            clause = self.clauses[idx]
 
             for literal in clause:
-                # literal = abs(literal)
-
                 if literal not in containment:
                     containment[literal] = {idx}
                 else:
                     containment[literal].add(idx)
 
+        return containment
+
     def _guess_assignment(self):
         assignment = {}
 
         for literal in self.containment:
-            literal = abs(literal)
-
-            assignment[literal] = random.random() > 0.5
+            if literal > 0:
+                assignment[literal] = random.random() > 0.5
 
         return assignment
 
+    def _check_sat(self):
+        unsat_clauses = self._find_unsat()
+        # print(unsat_clauses, len(unsat_clauses), len(unsat_clauses) is 0)
+
+        score = len(self.clauses) - len(unsat_clauses)
+
+        if len(unsat_clauses) is 0:
+            return True, score
+
+        return False, score
+
     def _predict_score(self, literal):
-        clauses = self.containment[literal]
+        try:
+            clauses = self.containment[literal]
+        except KeyError:
+            return 0
+
         sat_clauses = 0
 
         for idx in clauses:
-            clause = clauses[idx]
+            clause = self.clauses[idx]
             sat_literals = 0
 
+            # print(idx, clause)
             for literal_ in clause:
                 if self._get_assignment(literal_):
                     sat_literals += 1
@@ -434,9 +469,64 @@ class WalkSAT(Solver):
 
         return sat_clauses
 
+    def _add_assignment(self, literal, value):
+        """
+        Add an assignment
+        """
+        if literal < 0:
+            literal = abs(literal)
+            value = not value
 
-def generate_random_problems(n, variables=100, clause_size=3,
-                             num_clauses=1000):
+        self.assignment[literal] = value
+
+    def _flip_best_literal(self):
+        ties = []
+        best_score = -1e10
+
+        for literal in self.containment:
+            if literal < 0:
+                continue
+
+            score = self._predict_score(literal) \
+                + self._predict_score(-literal)
+
+            if score > best_score:
+                ties = [literal]
+                best_score = score
+            elif score is best_score:
+                ties.append(literal)
+
+        literal = random.choice(ties)
+
+        value = self._get_assignment(literal)
+        self._add_assignment(literal, not value)
+
+        # print(literal, value, best_score, ties)
+
+    def _random_walk(self):
+        unsat_clauses = self._find_unsat()
+        # print(unsat_clauses)
+
+        clause = random.choice(list(unsat_clauses.values()))
+        literal = random.choice(list(clause))
+
+        self._add_assignment(literal, not self._get_assignment(literal))
+
+    def _find_unsat(self):
+        unsat_clauses = {}
+        for idx, clause in self.clauses.items():
+            # print("find_unsat", idx, clause)
+            for literal in clause:
+                if self._get_assignment(literal):
+                    break
+            else:
+                unsat_clauses[idx] = clause
+
+        return unsat_clauses
+
+
+def generate_random_problems(n, variables=10, clause_size=3,
+                             num_clauses=40):
     for problem in range(n):
         clauses = []
 
@@ -444,7 +534,7 @@ def generate_random_problems(n, variables=100, clause_size=3,
             clause = set()
 
             for _ in range(clause_size):
-                literal = random.randint(1, variables)
+                literal = random.randint(0, variables - 1) + 1
 
                 if random.random() < 0.5:
                     literal *= -1
@@ -507,7 +597,6 @@ def test_gsat():
         solver = GreedySolver(problem)
         print(solver.solve())
 
-
     example = load_example()
     solver = GreedySolver(example)
     satisfied = solver.solve()
@@ -529,11 +618,16 @@ def test_gsat():
 
 
 def test_walksat():
+    for problem in generate_random_problems(10):
+        solver = WalkSAT(problem)
+        satisfied = solver.solve()
+        print("Satisfied" if satisfied else "Unsatisfied")
+
     example = load_example()
     solver = WalkSAT(example)
     satisfied = solver.solve()
 
-    print(satisfied)
+    print("Satisfied" if satisfied else "Unsatisfied")
     draw = draw_assignment(solver.assignment)
     entries = [int(char) for char in draw if char in '123456789']
     if check_sudoku(entries):
@@ -543,5 +637,5 @@ def test_walksat():
 
 if __name__ == "__main__":
     test_walksat()
-    test_gsat()
+    # test_gsat()
     # test_dpll()
