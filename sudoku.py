@@ -4,7 +4,7 @@ from tqdm import tqdm
 from copy import deepcopy
 
 EXAMPLE_PATH = 'example.txt'
-RULES_PATH = 'sudoku-rules.txt'
+RULES_PATH = 'sudoku-rules.cnf'
 PATHS = ['damnhard.sdk.txt', 'top91.sdk.txt', 'top95.sdk.txt',
          'top100.sdk.txt', 'top870.sdk.txt', 'top2365.sdk.txt',
          '1000_sudokus.txt', 'top2365.sdk.txt', 'subig20.sdk.txt']
@@ -91,6 +91,30 @@ def load_dimacs(path):
     clauses = []
 
     with open(path) as text:
+        lines = [line for line in text if 'c' not in line and 'r' not in line]
+
+    lines = ''.join(lines)
+    lines = lines.replace('\n', ' ')
+    lines = lines.replace('\t', ' ')
+    lines = lines.replace('\r', ' ')
+    lines = lines.split(' 0')
+
+    for line in lines:
+        variables = line.split()
+
+        if len(variables) is 0:
+            continue
+
+        # variables = [variable for variable in variables if variable != '0']
+
+        clause = {
+            int(variable)
+            for variable in variables
+        }
+
+        clauses.append(clause)
+
+        '''
         for line in text:
             if 'p' in line or 'c' in line:
                 continue
@@ -103,7 +127,9 @@ def load_dimacs(path):
                 for variable in variables
             }
 
-            clauses.append(clause)
+            if clause != set():
+                clauses.append(clause)
+        '''
 
     return clauses
 
