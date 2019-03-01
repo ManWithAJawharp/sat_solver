@@ -3,9 +3,6 @@ from copy import deepcopy
 
 EXAMPLE_PATH = 'example.txt'
 RULES_PATH = 'sudoku-rules.txt'
-# SUDOKU_PATH = '1000_sudokus.txt'
-# SUDOKU_PATH = 'damnhard.sdk.txt'
-SUDOKU_PATH = 'subig20.sdk.txt'
 PATHS = ['damnhard.sdk.txt', 'top91.sdk.txt', 'top95.sdk.txt',
          'top100.sdk.txt', 'top870.sdk.txt', 'top2365.sdk.txt',
          '1000_sudokus.txt', 'top2365.sdk.txt', 'subig20.sdk.txt']
@@ -25,24 +22,6 @@ def load_raw_sudokus(path):
     with open(path) as text:
         for line in text:
             yield line.strip()
-
-
-def txt2dimacs(raw, name):
-    """
-    Save a raw sudoku game to a DIMACS file.
-    """
-    with open(name, 'w') as output:
-        for idx, character in enumerate(raw):
-            if character != '.':
-                col = idx % 9
-                row = (idx - col) // 9
-
-                line = f"{row}{col}{character} 0\n"
-                output.write(line)
-
-        with open(RULES_PATH) as rule_file:
-            for rule in rule_file:
-                output.write(rule)
 
 
 def read_raw_sudoku(raw):
@@ -72,6 +51,32 @@ def read_raw_sudoku(raw):
     return sorted(clauses)
 
 
+def raw2dimacs(raw):
+    """
+    Convert a raw one-line sudoku to DIMACS CNF rules.
+
+    Parameters
+    ----------
+    raw : str
+        A single lined representation of a sudoku puzzle.
+
+    Returns
+    -------
+    list of str
+        List of all the CNF lines.
+    """
+    lines = []
+
+    for idx, character in enumerate(raw):
+        if character in '123456789':
+            col = idx % 9
+            row = (idx - col) // 9
+
+            lines.append(f"{row}{col}{character} 0\n")
+
+    return lines
+
+
 def load_dimacs(path):
     """
     Load a DIMACS CNF format file.
@@ -85,7 +90,7 @@ def load_dimacs(path):
 
     with open(path) as text:
         for line in text:
-            if 'p' in line:
+            if 'p' in line or 'c' in line:
                 continue
 
             line = line.strip("0 \n")
@@ -188,6 +193,38 @@ def create_assignment(game):
     return assignment
 
 
+def save_sudoku_cnf(path, rules, name, output_location=''):
+    """
+    Loads a raw sudoku file, converts each puzzle into clausal normal
+    form and saves them as DIMACS CNF files.
+
+    Parameters
+    ----------
+    path : str
+        Path to the sudoku file.
+    rules : str
+        Path to the DIMACS rule file.
+    name : str
+        Name of the output file. Note that if the input file contains
+        multiple puzzles, an index will be added to each saved file.
+    """
+    for idx, raw in enumerate(load_raw_sudokus(path)):
+        dimacs = raw2dimacs(raw)
+        print(dimacs)
+
+        with open(os.path.join(
+                output_location, f"{name}_{idx}.cnf"), 'w'
+                ) as output:
+            # TODO: Write comments and shit.
+            output.write(f"c Sudoku {name}_{idx} with rules.")
+            # TODO: Write the sudoku lines.
+            # TODO: Open the rules file.
+            # TODO: Write all rules to the output file.
+
+            with open(rules, 'r') as rules_file:
+                pass
+
+
 def check_sudoku(entries):
     """
     Check if a sudoku was solved correctly.
@@ -195,6 +232,11 @@ def check_sudoku(entries):
     Parameters
     ----------
     entries : iterable
+
+    Returns
+    -------
+    bool
+        True if the sudoku was solved correctly, False otherwise.
     """
     template = {idx + 1 for idx in range(9)}
 
@@ -224,8 +266,3 @@ def check_sudoku(entries):
                 return False
 
     return True
-
-
-if __name__ == "__main__":
-    for idx, raw in enumerate(load_raw_sudokus(PATHS[-1])):
-        txt2dimacs(raw, f"sudoku_nr_{idx+1}")
