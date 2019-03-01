@@ -74,7 +74,7 @@ def raw2dimacs(raw):
             col = idx % 9
             row = (idx - col) // 9
 
-            lines.append(f"{row}{col}{character} 0\n")
+            lines.append(f"{row+1}{col+1}{character} 0\n")
 
     return lines
 
@@ -91,7 +91,7 @@ def load_dimacs(path):
     clauses = []
 
     with open(path) as text:
-        lines = [line for line in text if 'c' not in line and 'r' not in line]
+        lines = [line for line in text if 'c' not in line and 'p' not in line]
 
     lines = ''.join(lines)
     lines = lines.replace('\n', ' ')
@@ -252,7 +252,7 @@ def save_sudoku_cnf(path, rules, name, output_location=''):
             output.write("c\n")
 
             # Write problem line.
-            output.write(f"p cnf 999 12016")
+            output.write(f"p cnf 999 12016\n")
 
             # Write puzzle facts.
             for line in dimacs:
@@ -308,7 +308,13 @@ def check_sudoku(entries):
 
 
 if __name__ == "__main__":
-    save_sudoku_cnf('damnhard.sdk.txt', 'sudoku-rules.cnf', 'test', 'puzzles/')
+    save_sudoku_cnf('simple_100.sdk.txt', 'sudoku-rules.cnf', 'simple',
+                    'simple/')
+    save_sudoku_cnf('easy_100.sdk.txt', 'sudoku-rules.cnf', 'easy', 'easy/')
+    save_sudoku_cnf('intermediate_100.sdk.txt', 'sudoku-rules.cnf',
+                    'intermediate', 'intermediate/')
+    save_sudoku_cnf('expert_100.sdk.txt', 'sudoku-rules.cnf', 'expert',
+                    'expert/')
 
     clauses = load_dimacs('puzzles/test_00000.cnf')
     print(clauses)

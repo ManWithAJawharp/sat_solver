@@ -731,12 +731,12 @@ if __name__ == "__main__":
         solver = Solver(clauses, split=random_split)
     elif args.strategy is 3:
         print("Selected WalkSAT")
-        solver = WalkSAT(clauses)
+        solver = WalkSAT(clauses, True)
     else:
         raise ValueError(f"'{args.strategy}' is not a valid strategy."
                          f"Please select 1, 2, or 3.")
 
     satisfied = solver.solve()
-    print(satisfied)
-    print(solver.assignment)
-    # print(f"Splits: {solver.splits}")
+    print("Satisfied" if satisfied else "Unsatisfied")
+
+    print(draw_assignment(solver.assignment))

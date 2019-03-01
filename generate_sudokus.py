@@ -21,7 +21,7 @@ def generate(n, difficulty):
         '--one-line'
     ])
 
-    return output.decode('utf-8').split('\n')
+    return output.decode('utf-8')
 
 
 def count_number(sudoku):
@@ -44,10 +44,9 @@ if __name__ == "__main__":
                         help="The number with puzzles to generate.")
     parser.add_argument('-d', '--difficulty', dest='difficulty', type=str,
                         default='simple',
-                        help="Difficulty level of the puzzles")
+                        help="Difficulty level of the puzzles. Select "
+                             f"{[d for d in DIFFICULTY]}.")
     args = parser.parse_args()
-
-    dataset = {}
 
     print(f"Generating {args.n} puzzles of {args.difficulty} difficulty")
 
@@ -57,13 +56,10 @@ if __name__ == "__main__":
 
     counts = [count_number(sudoku) for sudoku in sudokus]
 
-    dataset[args.difficulty] = sudokus
-
     if args.output is None:
         title = f"{args.n}_{args.difficulty}.sdk.txt"
     else:
         title = args.output
 
     with open(title, 'w') as output:
-        for puzzle in sudokus:
-            output.write(puzzle)
+        output.write(sudokus)
