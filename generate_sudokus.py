@@ -37,7 +37,7 @@ def count_number(sudoku):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Generate a number of sudoku puzzle of a given "
-            "difficulty.")
+                    "difficulty.")
     parser.add_argument('-o', '--output', dest='output', type=str,
                         help="File to write the puzzles to.")
     parser.add_argument('-n', type=int, default=1,
@@ -60,7 +60,7 @@ if __name__ == "__main__":
     dataset[args.difficulty] = sudokus
 
     if args.output is None:
-        title = f"{args.n}_{args.difficulty}.txt"
+        title = f"{args.n}_{args.difficulty}.sdk.txt"
     else:
         title = args.output
 

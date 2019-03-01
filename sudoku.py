@@ -1,3 +1,5 @@
+import os
+
 from tqdm import tqdm
 from copy import deepcopy
 
@@ -96,11 +98,14 @@ def load_dimacs(path):
             line = line.strip("0 \n")
 
             variables = line.split()
-            clause = {int(variable) for variable in variables}
+            clause = {
+                int(variable)
+                for variable in variables
+            }
 
             clauses.append(clause)
 
-    return sorted(clauses)
+    return clauses
 
 
 def load_games(path):
@@ -207,22 +212,30 @@ def save_sudoku_cnf(path, rules, name, output_location=''):
     name : str
         Name of the output file. Note that if the input file contains
         multiple puzzles, an index will be added to each saved file.
+    output_location : str, optional
+        Directory to write the output files to.
     """
     for idx, raw in enumerate(load_raw_sudokus(path)):
         dimacs = raw2dimacs(raw)
-        print(dimacs)
 
         with open(os.path.join(
-                output_location, f"{name}_{idx}.cnf"), 'w'
+            output_location, f"{name}_{idx:05d}.cnf"), 'w'
                 ) as output:
-            # TODO: Write comments and shit.
-            output.write(f"c Sudoku {name}_{idx} with rules.")
-            # TODO: Write the sudoku lines.
-            # TODO: Open the rules file.
-            # TODO: Write all rules to the output file.
+            # Write comments.
+            output.write(f"c Sudoku {name}_{idx:05d}.cnf with rules.\n")
+            output.write("c\n")
 
+            # Write problem line.
+            output.write(f"p cnf 999 12016")
+
+            # Write puzzle facts.
+            for line in dimacs:
+                output.write(line)
+
+            # Write sudoku rules.
             with open(rules, 'r') as rules_file:
-                pass
+                for line in rules_file:
+                    output.write(line)
 
 
 def check_sudoku(entries):
@@ -266,3 +279,11 @@ def check_sudoku(entries):
                 return False
 
     return True
+
+
+if __name__ == "__main__":
+    save_sudoku_cnf('damnhard.sdk.txt', 'sudoku-rules.cnf', 'test', 'puzzles/')
+
+    clauses = load_dimacs('puzzles/test_00000.cnf')
+    print(clauses)
+    print(len(clauses))
