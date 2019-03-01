@@ -216,7 +216,6 @@ class Solver():
 
             if len(self.clauses) is 0:
                 # Set of clauses is empty.
-                print("All clauses where satisfied")
                 return True
 
             # Check for empty clauses.
@@ -386,13 +385,14 @@ class GreedySolver(Solver):
 
 class WalkSAT(Solver):
     def __init__(self, clauses, simplify=False):
-        self.clauses = self._create_clauses(*clauses)
+        super(WalkSAT, self).__init__(clauses)
 
+        self.restarts = 0
         self.max_tries = 50
+        self.flips = 0
         self.max_flips = 10000
         self.containment = self._get_containment()
         self.assignment = self._guess_assignment()
-        self.change_log = [[]]
 
         if simplify:
             # Simplify by removing unit clauses.
@@ -439,6 +439,8 @@ class WalkSAT(Solver):
 
                 # print(self._find_unsat())
 
+        self.restarts = retry + 1
+        self.flips = flip + 1
         return sat
 
     def _get_containment(self):
@@ -713,30 +715,55 @@ def test_walksat():
         print(draw)
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="SAT Solver")
-    parser.add_argument('-S', metavar='N', dest='strategy', type=int,
-                        default=1, help="The strategy to apply to a problem.")
-    parser.add_argument(metavar='CNF', dest='cnf',
-                        help="Input file in DIMACS CNF format.")
-    args = parser.parse_args()
+def run(cnf, strategy=1, output=True, silent=False):
+    def print_(string):
+        if not silent:
+            print(string)
 
-    clauses = load_dimacs(args.cnf)
+    clauses = load_dimacs(cnf)
 
-    if args.strategy is 1:
-        print("Selected basic Davis-Putnam")
-        solver = Solver(clauses)
-    elif args.strategy is 2:
-        print("Selected Davis-Putnam with random split")
+    if strategy is 1:
+        print_("Selected basic Davis-Putnam")
+        solver = Solver(clauses, split=naive_split)
+    elif strategy is 2:
+        print_("Selected Davis-Putnam with random split")
         solver = Solver(clauses, split=random_split)
-    elif args.strategy is 3:
-        print("Selected WalkSAT")
+    elif strategy is 3:
+        print_("Selected WalkSAT")
         solver = WalkSAT(clauses, True)
     else:
         raise ValueError(f"'{args.strategy}' is not a valid strategy."
                          f"Please select 1, 2, or 3.")
 
     satisfied = solver.solve()
-    print("Satisfied" if satisfied else "Unsatisfied")
+    print_("Satisfied" if satisfied else "Unsatisfied")
 
-    print(draw_assignment(solver.assignment))
+    print_(draw_assignment(solver.assignment))
+
+    if output:
+        filename = cnf + '.out'
+        with open(filename, 'w') as output:
+            if not satisfied:
+                output.write("")
+                return
+
+            for key, value in sorted(solver.assignment.items()):
+                if value:
+                    output.write(f"{key}\n")
+                else:
+                    output.write(f"-{key}\n")
+    else:
+        return solver
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="SAT Solver")
+    parser.add_argument('-S', metavar='N', dest='strategy', type=int,
+                        default=1, help="The strategy to apply to a problem.")
+    parser.add_argument(metavar='CNF', dest='cnf',
+                        help="Input file in DIMACS CNF format.")
+    parser.add_argument('--noouput', dest='nooutput', type=bool,
+                        help="Do not write the truth assignment to a file.")
+    args = parser.parse_args()
+
+    run(args.cnf, args.strategy, not args.nooutput)

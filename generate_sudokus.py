@@ -1,5 +1,6 @@
-from subprocess import check_output
 import argparse
+
+from subprocess import check_output
 
 URL = "https://nine.websudoku.com/?level=1"
 DIFFICULTY = ['simple', 'easy', 'intermediate', 'expert']

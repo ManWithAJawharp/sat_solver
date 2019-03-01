@@ -1,6 +1,5 @@
 import os
 
-from tqdm import tqdm
 from copy import deepcopy
 
 EXAMPLE_PATH = 'example.txt'
@@ -161,7 +160,7 @@ def load_all_games():
 
         print(f"Loading {path} ({lines}) lines)")
 
-        for game in tqdm(load_games(path), total=lines):
+        for game in load_games(path):
             yield game
 
 
@@ -260,7 +259,9 @@ def save_sudoku_cnf(path, rules, name, output_location=''):
 
             # Write sudoku rules.
             with open(rules, 'r') as rules_file:
-                for line in rules_file:
+                for idx, line in enumerate(rules_file):
+                    if idx is 0:
+                        continue
                     output.write(line)
 
 
