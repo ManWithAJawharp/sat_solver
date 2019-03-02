@@ -90,48 +90,51 @@ def run_exp_2(strategy=2, repeats=10):
         json.dump(results, file)
 
 
-def run_exp_3(strategy=3, repeats=10):
+def run_exp_3(strategy=3, repeats=1):
     results = {}
 
-    for difficulty in DIFFICULTY:
-        print(f"Difficulty: {difficulty}")
-        results[difficulty] = {
-            'idx': [],
-            'flips': [],
-            'restarts': [],
-            'runtime': [],
-        }
+    try:
+        for difficulty in DIFFICULTY:
+            print(f"Difficulty: {difficulty}")
+            results[difficulty] = {
+                'idx': [],
+                'flips': [],
+                'restarts': [],
+                'runtime': [],
+            }
 
-        files = sorted(os.listdir(difficulty))
+            files = sorted(os.listdir(difficulty))
 
-        for idx, file in enumerate(tqdm(files)):
-            path = os.path.join(difficulty, file)
+            for idx, file in enumerate(tqdm(files)):
+                path = os.path.join(difficulty, file)
 
-            runtimes = []
-            flips = []
-            restarts = []
+                runtimes = []
+                flips = []
+                restarts = []
 
-            for i in range(repeats):
-                start = time.time()
-                solver = run(path, strategy=strategy, output=False,
-                             silent=True)
-                end = time.time()
+                for i in range(repeats):
+                    start = time.time()
+                    solver = run(path, strategy=strategy, output=False,
+                                 silent=True)
+                    end = time.time()
 
-                runtimes.append(end - start)
-                flips.append(solver.flips)
-                restarts.append(solver.restarts)
+                    runtimes.append(end - start)
+                    flips.append(solver.flips)
+                    restarts.append(solver.restarts)
 
-            results[difficulty]['idx'].append(idx)
-            results[difficulty]['flips'].append(np.mean(flips))
-            results[difficulty]['restarts'].append(np.mean(restarts))
-            results[difficulty]['runtime'].append(np.mean(runtimes))
+                results[difficulty]['idx'].append(idx)
+                results[difficulty]['flips'].append(np.mean(flips))
+                results[difficulty]['restarts'].append(np.mean(restarts))
+                results[difficulty]['runtime'].append(np.mean(runtimes))
 
-        results[difficulty]['mean_splits'] = np.mean(
-            results[difficulty]['splits'])
-        results[difficulty]['mean_runtime'] = np.mean(
-            results[difficulty]['runtime'])
+            results[difficulty]['mean_splits'] = np.mean(
+                results[difficulty]['flips'])
+            results[difficulty]['mean_runtime'] = np.mean(
+                results[difficulty]['runtime'])
+    except KeyboardInterrupt:
+        pass
 
-    with open(f"experiment_{strategy}.json", 'w') as file:
+    with open(f"experiment_5.json", 'w') as file:
         json.dump(results, file)
 
 

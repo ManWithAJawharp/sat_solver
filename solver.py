@@ -388,7 +388,7 @@ class WalkSAT(Solver):
         super(WalkSAT, self).__init__(clauses)
 
         self.restarts = 0
-        self.max_tries = 50
+        self.max_tries = 10
         self.flips = 0
         self.max_flips = 10000
         self.containment = self._get_containment()
@@ -420,10 +420,11 @@ class WalkSAT(Solver):
                 sys.stdout.flush()
 
                 if sat:
+                    self.flips = flip + 1
+                    self.restarts = retry
                     return True
 
                 select = random.random()
-                # progress = score / len(self.clauses)
                 progress = flip / self.max_flips
                 p_walk = progress * 0.7 + (1 - progress) * 0.9
                 p_best = progress * 0.9 + (1 - progress) * 0.95
@@ -437,9 +438,7 @@ class WalkSAT(Solver):
                     value = self._get_assignment(literal)
                     self._add_assignment(literal, not value)
 
-                # print(self._find_unsat())
-
-        self.restarts = retry + 1
+        self.restarts = retry
         self.flips = flip + 1
         return sat
 
@@ -457,7 +456,7 @@ class WalkSAT(Solver):
 
         return containment
 
-    def _guess_assignment(self, assignment=None, soft=0.7):
+    def _guess_assignment(self, assignment=None, soft=0.5):
         """
         Guess a random assignment.
         If an assignment is provided, a 'soft reset' will be
@@ -737,8 +736,6 @@ def run(cnf, strategy=1, output=True, silent=False):
 
     satisfied = solver.solve()
     print_("Satisfied" if satisfied else "Unsatisfied")
-
-    print_(draw_assignment(solver.assignment))
 
     if output:
         filename = cnf + '.out'
